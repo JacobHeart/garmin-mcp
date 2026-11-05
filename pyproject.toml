@@ -19,7 +19,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 garmin-mcp = "garmin_mcp.cli:main"
 
 [project.urls]
-Repository = "https://github.com/AlexYakovlevCa/garmin-mcp"
+Repository = "https://github.com/JacobHeart/garmin-mcp"
 
 [build-system]
 requires = ["hatchling"]

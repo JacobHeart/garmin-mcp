@@ -22,13 +22,13 @@ You need Python 3.12 or newer.
 **1. Install**
 
 ```bash
-pipx install git+https://github.com/AlexYakovlevCa/garmin-mcp
+pipx install git+https://github.com/JacobHeart/garmin-mcp
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install git+https://github.com/AlexYakovlevCa/garmin-mcp
+uv tool install git+https://github.com/JacobHeart/garmin-mcp
 ```
 
 **2. Log in**

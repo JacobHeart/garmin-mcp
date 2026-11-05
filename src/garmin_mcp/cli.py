@@ -58,7 +58,7 @@ def _steps_line(client: GarminClient) -> str | None:
 
 def _next_workout_line(client: GarminClient) -> str:
     today = date.today()
-    end = today + timedelta(days=14)
+    end = today + timedelta(days=13)
     schedules = client.call("get_scheduled_workouts_by_period", today.isoformat(), end.isoformat())
     rows = metrics.scheduled_rows(schedules or [])
     if not rows:

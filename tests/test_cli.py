@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import garminconnect
@@ -115,6 +115,19 @@ def test_missing_metric_is_reported_without_failing(capsys: pytest.CaptureFixtur
 
     assert cli._check_data(cli.GarminClient(BasicTracker("a", "b"))) is True
     assert "Training readiness today: not available" in capsys.readouterr().out
+
+
+def test_next_workout_covers_14_days_counting_today() -> None:
+    periods = []
+
+    class Recording(FakeApi):
+        def get_scheduled_workouts_by_period(self, start: str, end: str) -> list[dict[str, Any]]:
+            periods.append((start, end))
+            return []
+
+    cli._next_workout_line(cli.GarminClient(Recording("a", "b")))
+    start, end = periods[0]
+    assert date.fromisoformat(end) - date.fromisoformat(start) == timedelta(days=13)
 
 
 def test_expired_session_fails_with_login_instructions(

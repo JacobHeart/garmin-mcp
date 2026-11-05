@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date, timedelta
 from typing import Any
 
+import pytest
 from mcp import Client
 
 from garmin_mcp.client import GarminAuthRequired, GarminClient, GarminRequestFailed
@@ -150,3 +152,13 @@ def test_upcoming_uses_the_period_endpoint_without_duplicates() -> None:
     result = _run(garmin, "garmin_upcoming_workouts", {"days": 40})
     assert not result.is_error
     assert [c[0] for c in garmin.calls] == ["get_scheduled_workouts_by_period"]
+
+
+@pytest.mark.parametrize(("days", "days_after_today"), [(1, 0), (14, 13)])
+def test_upcoming_days_count_today_because_garmin_includes_the_end_date(
+    days: int, days_after_today: int
+) -> None:
+    garmin = FakeGarmin()
+    assert not _run(garmin, "garmin_upcoming_workouts", {"days": days}).is_error
+    start, end = garmin.calls[0][1]
+    assert date.fromisoformat(end) - date.fromisoformat(start) == timedelta(days=days_after_today)

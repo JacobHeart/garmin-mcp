@@ -171,7 +171,7 @@ def build_server(client: GarminClient | None = None) -> MCPServer:
         """Workouts on the user's Garmin calendar for the next N days, including today. Returns
         each one's schedule_id (for garmin_workout_unschedule) and workout_id."""
         start = date.today()
-        end = start + timedelta(days=days)
+        end = start + timedelta(days=days - 1)
         schedules = garmin.call(
             "get_scheduled_workouts_by_period", start.isoformat(), end.isoformat()
         )

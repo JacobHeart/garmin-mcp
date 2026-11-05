@@ -59,8 +59,11 @@ All set. Your data is coming through.
 Claude Code:
 
 ```bash
-claude mcp add garmin -- garmin-mcp
+claude mcp add --scope user garmin -- garmin-mcp
 ```
+
+`--scope user` makes it available in all your projects. Then start a new session, because running
+sessions don't pick up new servers.
 
 Claude Desktop: run `which garmin-mcp`, then add its full path to `claude_desktop_config.json`:
 
@@ -172,7 +175,7 @@ garmin-mcp update
 To update automatically, start the server with `--auto-update`:
 
 ```bash
-claude mcp add garmin -- garmin-mcp serve --auto-update
+claude mcp add --scope user garmin -- garmin-mcp serve --auto-update
 ```
 
 Each time the server starts, it checks GitHub in the background and installs any new commit from

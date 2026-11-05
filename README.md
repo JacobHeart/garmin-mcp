@@ -151,6 +151,8 @@ mkdir -p ~/.claude/skills && cp -R skills/garmin-training ~/.claude/skills/
 | `garmin-mcp` | Run the MCP server over stdio |
 | `garmin-mcp login` | Sign in, save the session and show some of your data |
 | `garmin-mcp doctor` | Show some of your data using the saved session, with no password needed |
+| `garmin-mcp update` | Install the latest version from GitHub |
+| `garmin-mcp serve --auto-update` | Run the server, and check for a new version in the background |
 
 | Environment variable | What it does |
 | --- | --- |
@@ -159,11 +161,37 @@ mkdir -p ~/.claude/skills && cp -R skills/garmin-training ~/.claude/skills/
 
 If the session expires, tools will ask you to run `garmin-mcp login` again.
 
+## Updates
+
+Updates are manual unless you turn on auto-update:
+
+```bash
+garmin-mcp update
+```
+
+To update automatically, start the server with `--auto-update`:
+
+```bash
+claude mcp add garmin -- garmin-mcp serve --auto-update
+```
+
+Each time the server starts, it checks GitHub in the background and installs any new commit from
+`main`. The new code applies the next time the server starts, which in Claude Code means your next
+session. A slow connection or a failed update won't delay or stop the server. Details of the last
+check are in `~/.garmin-mcp/update.log`.
+
+**Only turn this on if you trust this repository.** New code runs on your computer with access to your
+Garmin session, and nothing reviews it first.
+
+Updating needs `git` and `pip`, and has been tested with a `pip` install in a virtual environment. If
+you installed with `uv tool`, use uv to upgrade instead. Development checkouts are left alone.
+
 ## Privacy
 
 - Your password isn't saved by `garmin-mcp login`. Only a session token is, in a folder only your user
   can read. Treat that folder like a password.
-- The server sends nothing anywhere except Garmin, and has no telemetry.
+- The server sends nothing anywhere except Garmin, and has no telemetry. With `--auto-update` it also
+  asks GitHub for the latest commit, which sends none of your data.
 - **Whatever a tool returns goes to the AI client you connected**, and is handled under that client's
   terms. That can include sensitive health data such as sleep, heart rate and weight.
 

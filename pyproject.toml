@@ -1,0 +1,40 @@
+[project]
+name = "garmin-mcp"
+version = "0.1.0"
+description = "MCP server for Garmin Connect: read training and health data, and build structured workouts for your watch."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["garmin", "mcp", "model-context-protocol", "claude", "training", "running"]
+dependencies = [
+    "garminconnect>=0.3.20,<0.4",
+    "mcp>=2.3,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+garmin-mcp = "garmin_mcp.cli:main"
+
+[project.urls]
+Repository = "https://github.com/AlexYakovlevCa/garmin-mcp"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/garmin_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

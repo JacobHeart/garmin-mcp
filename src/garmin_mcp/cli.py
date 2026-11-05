@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import garminconnect
 
-from . import __version__, metrics
+from . import __version__, metrics, updater
 from .client import GarminClient, GarminError, GarminRequestFailed, prepare_token_dir
 
 
@@ -129,6 +129,15 @@ def _doctor() -> int:
     return 0
 
 
+def _update() -> int:
+    try:
+        print(updater.update())
+    except updater.UpdateError as exc:
+        print(f"Update failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="garmin-mcp", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
@@ -136,10 +145,16 @@ def main() -> None:
         "command",
         nargs="?",
         default="serve",
-        choices=["serve", "login", "doctor"],
+        choices=["serve", "login", "doctor", "update"],
         help="serve: run the MCP server over stdio (default). login: sign in to Garmin, save the "
         "session and show some of your data. doctor: show some of your data using the saved "
-        "session, without asking for a password.",
+        "session, without asking for a password. update: install the latest version from GitHub.",
+    )
+    parser.add_argument(
+        "--auto-update",
+        action="store_true",
+        help="with serve: check GitHub for a new version in the background on every start. It "
+        "applies the next time the server starts.",
     )
     args = parser.parse_args()
 
@@ -150,6 +165,11 @@ def main() -> None:
         sys.exit(_login())
     if args.command == "doctor":
         sys.exit(_doctor())
+    if args.command == "update":
+        sys.exit(_update())
+
+    if args.auto_update:
+        updater.start_background_update()
 
     from .server import build_server
 

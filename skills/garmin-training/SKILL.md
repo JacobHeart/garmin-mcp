@@ -10,6 +10,7 @@ description: Report on Garmin training, sleep and recovery data, and build struc
 | Question | Tool |
 | --- | --- |
 | "How has my training been?" | `garmin_activities` |
+| "How did that run go?", "Did I hit my targets?" | `garmin_activities` for the id, then `garmin_activity_analysis` |
 | "Am I recovered?", "Should I go hard today?" | `garmin_readiness`, then `garmin_sleep` |
 | "How did I sleep?" | `garmin_sleep` |
 | Steps, stress, body battery, weight | `garmin_body_metrics` |
@@ -31,6 +32,24 @@ pulling more than a couple of weeks. If you get rate-limited, say so and stop ra
   they do, say so.
 - Cadence units follow the sport: steps per minute for running and walking, revolutions for cycling,
   strokes for swimming.
+
+## Analysing a session
+
+`garmin_activity_analysis` takes the `id` from `garmin_activities` and costs 4-6 requests, so analyse
+the sessions the user asks about rather than every run in a week.
+
+- **Laps** are the workout's steps when the watch ran a structured workout, and auto-laps (usually
+  1 km) otherwise.
+- **intervals** only appears when work alternated with recovery. `fade_s_per_km` is the last rep's
+  pace minus the first's: positive means slowing down. `hr_rise_bpm` is the same for heart rate.
+- **hr_drift** only appears for steady runs of 20 minutes or more. Under about 5% decoupling means
+  the effort stayed aerobic. Hot weather and hills raise it too, so check the series before blaming
+  fitness.
+- **planned_workout** pairs each lap with its step when the session was a scheduled workout. If the
+  counts don't match, it says so instead of guessing. Lead with the verdict, such as "2 of 3 reps in
+  range, the last 1 bpm high", rather than reading every step out.
+- **series** is averaged into buckets. Use it to spot where pace faded or heart rate climbed, not to
+  quote single values.
 
 ## Building workouts
 

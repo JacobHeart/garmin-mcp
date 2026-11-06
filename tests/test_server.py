@@ -14,6 +14,7 @@ from garmin_mcp.server import build_server
 
 EXPECTED_TOOLS = {
     "garmin_activities",
+    "garmin_activity_analysis",
     "garmin_readiness",
     "garmin_sleep",
     "garmin_body_metrics",
@@ -162,3 +163,71 @@ def test_upcoming_days_count_today_because_garmin_includes_the_end_date(
     assert not _run(garmin, "garmin_upcoming_workouts", {"days": days}).is_error
     start, end = garmin.calls[0][1]
     assert date.fromisoformat(end) - date.fromisoformat(start) == timedelta(days=days_after_today)
+
+
+class RecordedSession(FakeGarmin):
+    """A scheduled 2 x 5 min workout, run on the watch."""
+
+    def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append((method, args))
+        lap = {"duration": 300.0, "distance": 1000.0, "averageSpeed": 3.33, "averageHR": 150.0}
+        if method == "get_activity":
+            return {
+                "activityId": 11,
+                "activityTypeDTO": {"typeKey": "running"},
+                "summaryDTO": {"startTimeLocal": "2026-11-06T19:00:00.0", "distance": 3000.0},
+            }
+        if method == "get_activity_splits":
+            return {
+                "lapDTOs": [
+                    {**lap, "intensityType": "INTERVAL", "averageHR": 162.0},
+                    {**lap, "intensityType": "RECOVERY", "duration": 60.0},
+                    {**lap, "intensityType": "INTERVAL", "averageHR": 168.0},
+                ]
+            }
+        if method == "get_activity_hr_in_timezones":
+            return [{"zoneNumber": 1, "secsInZone": 660.0, "zoneLowBoundary": 100}]
+        if method == "get_activity_details":
+            raise GarminRequestFailed("no recording")
+        if method == "get_scheduled_workouts_by_period":
+            return [{"associatedActivityId": 11, "workout": {"workoutId": 3}}]
+        if method == "get_workout_by_id":
+            hr = {"workoutTargetTypeKey": "heart.rate.zone"}
+            interval = {
+                "stepType": {"stepTypeKey": "interval"},
+                "endCondition": {"conditionTypeKey": "time"},
+                "endConditionValue": 300,
+                "targetType": hr,
+                "targetValueOne": 160,
+                "targetValueTwo": 165,
+            }
+            recovery = {
+                "stepType": {"stepTypeKey": "recovery"},
+                "endCondition": {"conditionTypeKey": "time"},
+                "endConditionValue": 60,
+            }
+            return {
+                "workoutName": "2 x 5 min",
+                "workoutSegments": [{"workoutSteps": [interval, recovery, interval]}],
+            }
+        return None
+
+
+def test_activity_analysis_links_the_planned_workout() -> None:
+    garmin = RecordedSession()
+    result = _run(garmin, "garmin_activity_analysis", {"activity_id": "11"})
+    assert not result.is_error
+    report = result.structured_content
+    assert len(report["laps"]) == 3
+    assert report["intervals"]["hr_rise_bpm"] == 6
+    assert "hr_drift" not in report  # an interval session
+    assert "series" not in report  # the recording failed, the rest still came back
+    planned = report["planned_workout"]
+    assert planned["name"] == "2 x 5 min"
+    assert planned["steps_in_range"] == 1
+    assert planned["steps"][2]["result"] == "above by 3 bpm"
+    assert ("get_scheduled_workouts_by_period", ("2026-11-06", "2026-11-06")) in garmin.calls
+
+
+def test_activity_analysis_rejects_a_non_numeric_id() -> None:
+    assert _run(FakeGarmin(), "garmin_activity_analysis", {"activity_id": "abc"}).is_error

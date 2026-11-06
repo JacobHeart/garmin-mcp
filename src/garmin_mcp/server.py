@@ -9,7 +9,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from . import __version__, metrics
+from . import __version__, analysis, metrics
 from .client import GarminClient, GarminError, GarminRequestFailed
 from .workouts import (
     Sport,
@@ -28,6 +28,7 @@ Reporting data:
 - Report totals as returned by the tools rather than adding numbers up yourself.
 - Be specific: "4 runs, 35 km, longest 12 km on Saturday" beats "you ran a lot".
 - Every read calls Garmin live and Garmin rate-limits aggressively. Ask for the days you need.
+- To analyse one session, take its `id` from garmin_activities and call garmin_activity_analysis.
 
 Building workouts:
 - Workouts are written to the user's real Garmin account and can reach their watch.
@@ -76,6 +77,58 @@ def build_server(client: GarminClient | None = None) -> MCPServer:
         start = today - timedelta(days=days - 1)
         data = garmin.call("get_activities_by_date", start.isoformat(), today.isoformat())
         return metrics.activities_report(data or [])
+
+    @mcp.tool(annotations=READ)
+    def garmin_activity_analysis(
+        activity_id: Annotated[
+            str, Field(pattern=r"^\d+$", description="The `id` from garmin_activities.")
+        ],
+        include_series: Annotated[
+            bool,
+            Field(description="Add a downsampled table of heart rate, pace and elevation."),
+        ] = True,
+    ) -> dict[str, Any]:
+        """A full breakdown of one session: every lap or workout step (pace, heart rate, cadence,
+        power, elevation, running dynamics), how the work reps compared, time in each heart-rate
+        zone, heart-rate drift on steady runs, how each planned step's target was hit when the
+        session was a scheduled workout, and the recording over time. Makes about 4-6 Garmin
+        requests."""
+        activity = garmin.call("get_activity", activity_id) or {}
+        splits = garmin.try_call("get_activity_splits", activity_id)
+        zones = garmin.try_call("get_activity_hr_in_timezones", activity_id)
+        samples = analysis.parse_series(garmin.try_call("get_activity_details", activity_id, 2000))
+
+        intervals = analysis.interval_summary(splits)
+        report: dict[str, Any] = {
+            "activity": analysis.activity_summary(activity),
+            "laps": analysis.lap_rows(splits) or None,
+            "intervals": intervals,
+            "hr_zones": analysis.zone_rows(zones) or None,
+            # Drift compares two halves of a steady effort; on intervals it only measures the plan.
+            "hr_drift": None if intervals else analysis.hr_drift(samples),
+        }
+
+        workout_id = analysis.linked_workout_id(activity)
+        if workout_id is None:
+            day = str((activity.get("summaryDTO") or {}).get("startTimeLocal") or "")[:10]
+            if day:
+                schedules = garmin.try_call("get_scheduled_workouts_by_period", day, day)
+                workout_id = analysis.find_planned_workout_id(schedules, activity_id)
+        if workout_id:
+            workout = garmin.try_call("get_workout_by_id", workout_id)
+            if workout:
+                steps: list[dict[str, Any]] = []
+                for segment in workout.get("workoutSegments") or []:
+                    steps.extend(read_steps(segment.get("workoutSteps") or []))
+                report["planned_workout"] = {
+                    "workout_id": workout_id,
+                    "name": workout.get("workoutName"),
+                    **analysis.compliance(steps, splits, samples),
+                }
+
+        if include_series:
+            report["series"] = analysis.series_table(samples, analysis.auto_interval(samples))
+        return metrics.drop_empty(report)
 
     @mcp.tool(annotations=READ)
     def garmin_readiness(days: Days = 3) -> dict[str, Any]:

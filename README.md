@@ -82,7 +82,7 @@ Other MCP clients: run `garmin-mcp` as a stdio server.
 | Tool | What it does |
 | --- | --- |
 | `garmin_activities` | Recent activities with pace, heart rate, cadence, power, training effect and totals |
-| `garmin_activity_analysis` | One session in full: every lap or step, rep-by-rep comparison, time in zones, heart-rate drift, how each planned target was hit, and the recording over time |
+| `garmin_activity_analysis` | One session in full: every lap or step with cadence, power and running dynamics, rep-by-rep comparison, km splits, heart-rate and power zones, heart-rate drift, weather, how each planned target was hit, and the full recording over time |
 | `garmin_readiness` | Training readiness, recovery time, HRV, training status and load, VO2max, endurance and hill scores |
 | `garmin_sleep` | Sleep score, duration vs. need, stages, overnight heart rate, HRV, stress and respiration |
 | `garmin_body_metrics` | Body battery, steps, calories, stress, heart rate, intensity minutes, SpO2, weigh-ins, fitness age |

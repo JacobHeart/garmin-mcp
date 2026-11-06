@@ -35,21 +35,27 @@ pulling more than a couple of weeks. If you get rate-limited, say so and stop ra
 
 ## Analysing a session
 
-`garmin_activity_analysis` takes the `id` from `garmin_activities` and costs 4-6 requests, so analyse
+`garmin_activity_analysis` takes the `id` from `garmin_activities` and costs 5-8 requests, so analyse
 the sessions the user asks about rather than every run in a week.
 
-- **Laps** are the workout's steps when the watch ran a structured workout, and auto-laps (usually
-  1 km) otherwise.
+- **activity** and **laps** carry every metric the device sent: pace, grade-adjusted pace, heart rate,
+  cadence, power, ground contact, stride length, vertical oscillation and ratio, elevation,
+  respiration. Laps are the workout's steps when the watch ran a structured workout, and auto-laps
+  otherwise.
 - **intervals** only appears when work alternated with recovery. `fade_s_per_km` is the last rep's
-  pace minus the first's: positive means slowing down. `hr_rise_bpm` is the same for heart rate.
+  pace minus the first's, so positive means slowing down. Heart rate, cadence and power are compared
+  first rep to last too.
+- **km_splits** are computed from the recording, so they exist whatever the watch's lap settings were.
 - **hr_drift** only appears for steady runs of 20 minutes or more. Under about 5% decoupling means
-  the effort stayed aerobic. Hot weather and hills raise it too, so check the series before blaming
-  fitness.
-- **planned_workout** pairs each lap with its step when the session was a scheduled workout. If the
-  counts don't match, it says so instead of guessing. Lead with the verdict, such as "2 of 3 reps in
-  range, the last 1 bpm high", rather than reading every step out.
-- **series** is averaged into buckets. Use it to spot where pace faded or heart rate climbed, not to
-  quote single values.
+  the effort stayed aerobic. It uses grade-adjusted pace when the device has it. Heat raises it too,
+  so check **weather** before blaming fitness.
+- **planned_workout** pairs each lap with its step when the session was a scheduled workout, with the
+  share of each step spent inside its target. If the counts don't match, it says so instead of
+  guessing. Lead with the verdict, such as "2 of 3 reps in range, the last 1 bpm high".
+- **series** is the recording averaged into buckets. Its columns depend on the device, and channels
+  without a friendly name keep Garmin's own. Use it to spot where pace faded or heart rate climbed.
+- **notes** lists any part Garmin couldn't supply. Mention the gap rather than filling it in.
+- `show_field_names: true` adds the raw Garmin keys, useful when a new watch reports something odd.
 
 ## Building workouts
 

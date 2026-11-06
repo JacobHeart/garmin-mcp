@@ -231,3 +231,35 @@ def test_activity_analysis_links_the_planned_workout() -> None:
 
 def test_activity_analysis_rejects_a_non_numeric_id() -> None:
     assert _run(FakeGarmin(), "garmin_activity_analysis", {"activity_id": "abc"}).is_error
+
+
+class JunkGarmin(FakeGarmin):
+    """Every endpoint answers with something malformed."""
+
+    JUNK: dict[str, Any] = {
+        "get_activity": {"activityId": 5, "summaryDTO": "oops", "activityTypeDTO": 3},
+        "get_activity_splits": {"lapDTOs": ["x", {"duration": "long", "averageHR": True}]},
+        "get_activity_details": {"metricDescriptors": "nope", "activityDetailMetrics": [1]},
+        "get_activity_hr_in_timezones": {"zones": [{"zoneNumber": "1"}, None]},
+        "get_activity_weather": ["sunny"],
+        "get_scheduled_workouts_by_period": "none",
+    }
+
+    def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append((method, args))
+        return self.JUNK.get(method)
+
+
+def test_activity_analysis_survives_malformed_responses() -> None:
+    result = _run(
+        JunkGarmin(), "garmin_activity_analysis", {"activity_id": "5", "show_field_names": True}
+    )
+    assert not result.is_error, result.content
+    report = result.structured_content
+    assert report["activity"]["id"] == 5
+    assert report["laps"][0]["lap"] == 1
+
+
+def test_activity_analysis_reports_a_missing_activity() -> None:
+    result = _run(FakeGarmin(), "garmin_activity_analysis", {"activity_id": "5"})
+    assert result.is_error

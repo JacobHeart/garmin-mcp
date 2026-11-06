@@ -84,50 +84,113 @@ def build_server(client: GarminClient | None = None) -> MCPServer:
             str, Field(pattern=r"^\d+$", description="The `id` from garmin_activities.")
         ],
         include_series: Annotated[
-            bool,
-            Field(description="Add a downsampled table of heart rate, pace and elevation."),
+            bool, Field(description="Add the recording over time, every channel the device has.")
         ] = True,
+        show_field_names: Annotated[
+            bool, Field(description="Add the raw Garmin keys behind the report, for debugging.")
+        ] = False,
     ) -> dict[str, Any]:
-        """A full breakdown of one session: every lap or workout step (pace, heart rate, cadence,
-        power, elevation, running dynamics), how the work reps compared, time in each heart-rate
-        zone, heart-rate drift on steady runs, how each planned step's target was hit when the
-        session was a scheduled workout, and the recording over time. Makes about 4-6 Garmin
-        requests."""
-        activity = garmin.call("get_activity", activity_id) or {}
+        """A full breakdown of one session: every lap or workout step (pace, grade-adjusted pace,
+        heart rate, cadence, power, running dynamics, elevation, respiration), how the work reps
+        compared, kilometre splits, time in heart-rate and power zones, heart-rate drift on steady
+        runs, weather, how each planned step's target was hit when the session was a scheduled
+        workout, and the recording over time. Makes about 5-8 Garmin requests."""
+        activity = garmin.call("get_activity", activity_id)
+        if not isinstance(activity, dict):
+            raise GarminError(f"Garmin returned no activity {activity_id}. Check the id.")
+        summary = activity.get("summaryDTO")
+        if not isinstance(summary, dict):
+            summary = {}
+            activity = {**activity, "summaryDTO": summary}
+        sport = analysis.sport_of(activity)
+        report: dict[str, Any] = {}
+        notes: list[str] = []
+
+        def section(name: str, build: Any) -> Any:
+            """One part of the report. A failure becomes a note, not a failed report."""
+            try:
+                return build()
+            except GarminError:
+                raise  # auth and rate limits: every later request would fail the same way
+            except Exception as exc:  # noqa: BLE001 - Garmin's responses are undocumented
+                notes.append(f"{name} unavailable: {type(exc).__name__}: {exc}")
+                return None
+
+        report["activity"] = section("summary", lambda: analysis.activity_summary(activity))
         splits = garmin.try_call("get_activity_splits", activity_id)
-        zones = garmin.try_call("get_activity_hr_in_timezones", activity_id)
-        samples = analysis.parse_series(garmin.try_call("get_activity_details", activity_id, 2000))
+        details = garmin.try_call("get_activity_details", activity_id, 2000, 0)
+        recording = section("recording", lambda: analysis.Recording(details, sport))
+        if recording is None:
+            recording = analysis.Recording(None, sport)
+        if details is None:
+            notes.append("recording unavailable: Garmin returned no samples")
 
-        intervals = analysis.interval_summary(splits)
-        report: dict[str, Any] = {
-            "activity": analysis.activity_summary(activity),
-            "laps": analysis.lap_rows(splits) or None,
-            "intervals": intervals,
-            "hr_zones": analysis.zone_rows(zones) or None,
-            # Drift compares two halves of a steady effort; on intervals it only measures the plan.
-            "hr_drift": None if intervals else analysis.hr_drift(samples),
-        }
+        report["laps"] = section("laps", lambda: analysis.lap_rows(splits, sport)) or None
+        intervals = section("intervals", lambda: analysis.interval_summary(splits))
+        report["intervals"] = intervals
+        report["km_splits"] = section("km_splits", lambda: analysis.km_splits(recording))
+        report["hr_zones"] = (
+            section(
+                "hr_zones",
+                lambda: analysis.zone_rows(
+                    garmin.try_call("get_activity_hr_in_timezones", activity_id)
+                ),
+            )
+            or None
+        )
+        if summary.get("averagePower"):
+            report["power_zones"] = (
+                section(
+                    "power_zones",
+                    lambda: analysis.zone_rows(
+                        garmin.try_call("get_activity_power_in_timezones", activity_id), "W"
+                    ),
+                )
+                or None
+            )
+        # Drift compares two halves of a steady effort; on intervals it only measures the plan.
+        if not intervals:
+            report["hr_drift"] = section("hr_drift", lambda: analysis.hr_drift(recording))
+        report["weather"] = section(
+            "weather",
+            lambda: analysis.weather(garmin.try_call("get_activity_weather", activity_id)),
+        )
 
-        workout_id = analysis.linked_workout_id(activity)
-        if workout_id is None:
-            day = str((activity.get("summaryDTO") or {}).get("startTimeLocal") or "")[:10]
-            if day:
+        def planned() -> dict[str, Any] | None:
+            workout_id = analysis.linked_workout_id(activity)
+            if workout_id is None:
+                day = str(summary.get("startTimeLocal") or "")[:10]
+                if not day:
+                    return None
                 schedules = garmin.try_call("get_scheduled_workouts_by_period", day, day)
                 workout_id = analysis.find_planned_workout_id(schedules, activity_id)
-        if workout_id:
+            if not workout_id:
+                return None
             workout = garmin.try_call("get_workout_by_id", workout_id)
-            if workout:
-                steps: list[dict[str, Any]] = []
-                for segment in workout.get("workoutSegments") or []:
-                    steps.extend(read_steps(segment.get("workoutSteps") or []))
-                report["planned_workout"] = {
-                    "workout_id": workout_id,
-                    "name": workout.get("workoutName"),
-                    **analysis.compliance(steps, splits, samples),
-                }
+            if not workout:
+                return None
+            steps: list[dict[str, Any]] = []
+            for segment in workout.get("workoutSegments") or []:
+                steps.extend(read_steps(segment.get("workoutSteps") or []))
+            return {
+                "workout_id": workout_id,
+                "name": workout.get("workoutName"),
+                **analysis.compliance(steps, splits, recording),
+            }
+
+        report["planned_workout"] = section("planned_workout", planned)
 
         if include_series:
-            report["series"] = analysis.series_table(samples, analysis.auto_interval(samples))
+            report["series"] = section(
+                "series",
+                lambda: analysis.series_table(recording, analysis.auto_interval(recording)),
+            )
+        if show_field_names:
+            report["field_names"] = section(
+                "field_names", lambda: analysis.field_names(activity, splits, recording)
+            )
+        if notes:
+            report["notes"] = notes
         return metrics.drop_empty(report)
 
     @mcp.tool(annotations=READ)

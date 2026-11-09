@@ -163,7 +163,10 @@ mkdir -p ~/.claude/skills && cp -R skills/garmin-training ~/.claude/skills/
 | `GARMIN_TOKEN_DIR` | Where the session is saved. The default is `~/.garmin-mcp/tokens` |
 | `GARMIN_EMAIL`, `GARMIN_PASSWORD` | Optional, for machines where you can't log in interactively |
 
-If the session expires, tools will ask you to run `garmin-mcp login` again.
+The session renews itself: Garmin's access token lasts about a day, and the server refreshes it
+and saves the new tokens. Several clients can run the server at once (Claude Code, Claude Desktop,
+the Claude app), and they share one session safely. If the session does expire, tools will ask you
+to run `garmin-mcp login` again, and running servers pick up the new session without a restart.
 
 ## Updates
 

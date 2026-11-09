@@ -86,6 +86,15 @@ def test_refresh_renews_adopted_tokens_that_are_also_expiring(tmp_path: Path) ->
     assert session.refreshes == 1
 
 
+def test_a_failed_refresh_is_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    session = FakeSession("dead", expiring=True)  # refreshing leaves it expiring: it failed
+    share_token_refreshes(FakeApi(session), tmp_path)
+
+    session._refresh_session()
+
+    assert "refresh failed" in caplog.text
+
+
 def test_refresh_works_without_a_token_file(tmp_path: Path) -> None:
     session = FakeSession("only", expiring=True)
     share_token_refreshes(FakeApi(session), tmp_path)

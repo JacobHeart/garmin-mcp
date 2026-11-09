@@ -115,6 +115,11 @@ def share_token_refreshes(api: Any, directory: Path) -> None:
             if _adopt_saved_tokens(session, directory) and not session._token_expires_soon():
                 return
             refresh()  # the library saves the renewed tokens to the token file
+            if session._token_expires_soon():
+                # garminconnect only logs a failed refresh at debug level.
+                logger.warning(
+                    "Garmin token refresh failed. If tools keep failing, run `garmin-mcp login`."
+                )
 
     session._refresh_session = coordinated_refresh
 
